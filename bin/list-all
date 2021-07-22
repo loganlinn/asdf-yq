@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 
-release_path=https://api.github.com/repos/mikefarah/yq/releases
-cmd="curl -s"
-if [ -n "$GITHUB_API_TOKEN" ]; then
-  cmd="$cmd -H 'Authorization: token $GITHUB_API_TOKEN'"
-fi
-cmd="$cmd $release_path"
+function get_versions() {
+	local curl_opts=(
+		--silent
+		--header 'Accept: application/vnd.github.v3+json'
+	)
 
-function sort_versions() {
-  sed 'h; s/[+-]/./g; s/.p\([[:digit:]]\)/.z\1/; s/$/.z/; G; s/\n/ /' | \
-    LC_ALL=C sort -t. -k 1,1 -k 2,2n -k 3,3n -k 4,4n -k 5,5n | awk '{print $2}'
+	if [ -n "$GITHUB_API_TOKEN" ]; then
+		curl_opts+=(--header 'Authorization: token $GITHUB_API_TOKEN')
+	fi
+
+	curl "${curl_opts[@]}" 'https://api.github.com/repos/mikefarah/yq/releases?per_page=100' |
+		grep -oE "tag_name\": *\"[^\"]+\"," |
+		sed -e 's/tag_name\": *\"v\?//;s/\",//'
 }
 
-versions=$(eval $cmd | grep -oE "tag_name\": *\".{1,15}\"," | sed 's/tag_name\": *\"//;s/\",//' | sort_versions)
-echo $versions
+# https://github.com/rbenv/ruby-build/blob/ac92ec0507fad718e7abcf13540641937ecfef3f/bin/ruby-build#L1201
+sort_versions() {
+	sed 'h; s/[+-]/./g; s/.p\([[:digit:]]\)/.z.\1/; s/$/.z/; G; s/\n/ /' |
+		LC_ALL=C sort -t. -k 1,1 -k 2,2n -k 3,3n -k 4,4n -k 5,5n | awk '{print $2}'
+}
+
+# xargs used to print all versions on single line
+get_versions | sort_versions | xargs
